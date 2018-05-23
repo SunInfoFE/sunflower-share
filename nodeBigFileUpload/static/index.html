@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>大文件上传</title>
+</head>
+<body style="padding: 50px">
+<div>
+  <form action="/upload" method="post" enctype="multipart/form-data">
+    file: <input type="file" id="file" name="file"/>
+  </form>
+  <br/>
+  校验进度：
+  <div style="display: inline-block; width: 200px; height: 5px; background: #cdcdcd">
+    <div id="progress" style="background: #0000ff;width: 0; height: 100%;"></div>
+  </div>
+  <span id="progressDesc">等待选择文件...</span>
+  <br/><br/>
+  上传进度：
+  <div style="display: inline-block; width: 200px; height: 5px; background: #cdcdcd">
+    <div id="uploadProgress" style="background: #0000ff;width: 0; height: 100%;"></div>
+  </div>
+  <span id="uploadProgressDesc">等待校验完成...</span>
+  <button id="pause">暂停</button>
+  <br/>
+</div>
+<script src="./spark-md5.js"></script>
+<script src="./axios.js"></script>
+<script type="text/javascript">
+  let fileElement = document.querySelector('#file')
+  // 信息显示
+  let progress = document.querySelector('#progress')
+  let progressDesc = document.querySelector('#progressDesc')
+  let uploadProgress = document.querySelector('#uploadProgress')
+  let uploadProgressDesc = document.querySelector('#uploadProgressDesc')
+  // 暂停/继续
+  let pause = document.querySelector('#pause')
+  let stop = false
+  fileElement.addEventListener('change', function () {
+    // 首先获取文件
+    let file = fileElement.files[0]
+    if (!file) {
+      return
+    }
+    // 设置分片大小，计算分片数目
+    let chunkSize = 1024 * 1024 * 2
+    let chunks = Math.ceil(file.size / chunkSize)
+    let currentChunk = 0
+    // 初始化MD5校验方法
+    let spark = new SparkMD5.ArrayBuffer()
+    // HTML5 fileReader API
+    let fileReader = new FileReader()
+    // 错误处理
+    fileReader.onerror = function () {
+      console.warn('oops, something went wrong.');
+    };
+    // 数据处理
+    fileReader.onload = function (e) {
+      // 进度条
+      progress.style.width = progressDesc.innerHTML = (((currentChunk + 1) / chunks) * 100).toFixed(2) + '%'
+      // 添加到ArrayBuffer中
+      spark.append(e.target.result);
+      currentChunk++;
+      if (currentChunk < chunks) {
+        // fileReader加载下一个分片
+        loadNext();
+      } else {
+        // 完成校验
+        let md5 = spark.end()
+        console.log(md5)
+        axios.post('/checkFile', {md5}).then(function ({data}) {
+          if (data.status === true) {
+            doUpload(file, chunks, chunkSize, md5, data.current)
+          } else {
+            uploadProgress.style.width = '100%'
+            uploadProgressDesc.innerHTML = '秒传成功!'
+          }
+        })
+        // 暂停按钮事件
+        pause.addEventListener('click', function () {
+          if (stop) {
+            // 继续
+            axios.post('/checkFile', {md5}).then(function ({data}) {
+              doUpload(file, chunks, chunkSize, md5, data.current)
+            })
+          }
+          stop = !stop
+          pause.innerHTML = stop ? '继续' : '暂停'
+        })
+      }
+    };
+
+    function loadNext() {
+      let start = currentChunk * chunkSize
+      let end = ((start + chunkSize) >= file.size) ? file.size : start + chunkSize;
+      fileReader.readAsArrayBuffer(file.slice(start, end))
+      console.log(file.slice(start, end))
+    }
+
+    function doUpload(file, total, chunkSize, md5, current) {
+      uploadChunk(createFormData({
+        md5, total, current,
+        file: file.slice(current * chunkSize, ((current * chunkSize + chunkSize) >= file.size) ? file.size : current * chunkSize + chunkSize)
+      }))
+      function uploadChunk(params) {
+        if (stop) {
+          return
+        }
+        // 上传
+        return axios.post('/uploadChunk', params).then(function ({data}) {
+          console.log('network:', data)
+          let current = data.current
+          uploadProgress.style.width = uploadProgressDesc.innerHTML = (((current) / total) * 100).toFixed(2) + '%'
+          console.log(current, total)
+          if (current < total) {
+            // 没有结束，上传下一个分片
+            uploadChunk(createFormData({
+              md5, total, current,
+              file: file.slice(current * chunkSize, ((current * chunkSize + chunkSize) >= file.size) ? file.size : current * chunkSize + chunkSize)
+            }))
+          } else {
+            // 通知服务端，上传结束
+            axios.post('/finishUpload', {
+              name: file.name,
+              total,
+              md5
+            }).then(function ({data}) {
+              if (data.status === true) {
+                uploadProgress.style.width = '100%'
+                uploadProgressDesc.innerHTML = data.data
+              }
+            })
+          }
+        })
+      }
+    }
+
+    function createFormData(params) {
+      let formData = new FormData()
+      for (let key in params) {
+        formData.append(key, params[key])
+      }
+      return formData
+    }
+
+    loadNext();
+  })
+</script>
+</body>
+</html>
