@@ -10,3 +10,5 @@
 - [新闻爬虫](https://github.com/SunInfoFE/sunflower-share/blob/master/20180516.md) - caoLiXin
 - [css](https://github.com/SunInfoFE/sunflower-share/blob/master/20180530.md) - licong
 - [CreateJS入门](https://github.com/SunInfoFE/sunflower-share/blob/master/20180718.md) - caoLiXin
+- [node识别验证码](https://segmentfault.com/a/1190000015134802) - huog
+- [electron入门](https://github.com/fighting123/electron-share) - huog
