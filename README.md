@@ -12,3 +12,4 @@
 - [CreateJS入门](https://github.com/SunInfoFE/sunflower-share/blob/master/20180718.md) - caoLiXin
 - [node识别验证码](https://segmentfault.com/a/1190000015134802) - huog
 - [electron入门](https://github.com/fighting123/electron-share) - huog
+- [react-native 通过webview 桥接网页](https://www.shifeng1993.com/2018/08/28/rn_webview/) - haise
